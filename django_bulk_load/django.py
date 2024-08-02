@@ -87,13 +87,16 @@ def models_to_tsv_buffer(
 
 
 def get_model_fields(
-    model_meta: Options, include_auto_fields=False
+    model_meta: Options, include_auto_fields=False, include_generated_fields=False
 ) -> List[models.Field]:
     fields = []
     for field in model_meta.get_fields():
         if (
             getattr(field, "column", None)
             and (include_auto_fields or not isinstance(field, models.AutoField))
+            and (
+                include_generated_fields or not isinstance(field, models.GeneratedField)
+            )
             and not isinstance(field, models.ManyToManyField)
         ):
             fields.append(field)
@@ -108,10 +111,17 @@ def get_fields_from_names(
 
 
 def get_fields_and_names(
-    field_names: Optional[Iterable[str]], model_meta: Options, include_auto_fields=False
+    field_names: Optional[Iterable[str]],
+    model_meta: Options,
+    include_auto_fields=False,
+    include_generated_fields: bool = False,
 ) -> Tuple[List[models.Field], List[str]]:
     if field_names is None:
-        fields = get_model_fields(model_meta, include_auto_fields=include_auto_fields)
+        fields = get_model_fields(
+            model_meta,
+            include_auto_fields=include_auto_fields,
+            include_generated_fields=include_generated_fields,
+        )
     else:
         fields = get_fields_from_names(field_names, model_meta)
 

@@ -28,7 +28,7 @@ from .queries import (
     generate_select_query,
     generate_update_query,
     generate_values_select_query,
-    copy_query
+    copy_query,
 )
 from .utils import generate_table_name
 
@@ -144,6 +144,7 @@ def bulk_load_models_with_queries(
 def bulk_insert_models(
     models: Sequence[Model],
     ignore_conflicts: bool = False,
+    include_generated_fields: bool = False,
     return_models: bool = False,
 ):
     """
@@ -180,7 +181,12 @@ def bulk_insert_models(
 
     loading_table_name = generate_table_name(table_name)
 
-    insert_fields = get_model_fields(model_meta, include_auto_fields=has_pks)
+    insert_fields = get_model_fields(
+        model_meta,
+        include_auto_fields=has_pks,
+        include_generated_fields=include_generated_fields,
+    )
+
     insert_query = generate_insert_query(
         table_name=table_name,
         loading_table_name=loading_table_name,
@@ -317,6 +323,7 @@ def bulk_upsert_models(
     model_changed_field_names: Sequence[str] = None,
     update_if_null_field_names: Sequence[str] = None,
     update_where: Callable[[Sequence[Field], str, str], Composable] = None,
+    include_generated_fields: bool = False,
     return_models: bool = False,
 ):
     """
@@ -347,7 +354,9 @@ def bulk_upsert_models(
     update_if_null_field_names = update_if_null_field_names or []
     model_meta = models[0]._meta
     table_name = model_meta.db_table
-    fields, field_names = get_fields_and_names(None, model_meta)
+    fields, field_names = get_fields_and_names(
+        None, model_meta, include_generated_fields=include_generated_fields
+    )
 
     pk_fields = get_pk_fields(pk_field_names, model_meta)
     pk_field_names = [field.name for field in pk_fields]
@@ -500,7 +509,7 @@ def bulk_select_model_dicts(
     select_field_names: Iterable[str],
     filter_data: Iterable[Sequence],
     skip_filter_transform=False,
-    select_for_update=False
+    select_for_update=False,
 ) -> List[Dict]:
     """
     Select/Get model dictionaries by filter_field_names. It returns dictionaries, not Django
@@ -556,7 +565,7 @@ def bulk_select_model_dicts(
             table_name=table_name,
             select_fields=select_fields,
             filter_fields=filter_fields,
-            select_for_update=select_for_update
+            select_for_update=select_for_update,
         )
         sql_string = sql.as_string(cursor.connection)
 
@@ -573,11 +582,13 @@ def bulk_select_model_dicts(
         for row in cursor.fetchall():
             results.append(
                 {
-                    select_field_map[column]
-                    .attname: select_field_map[column]
-                    .from_db_value(value, expression=None,  connection=connection)
-                    if hasattr(select_field_map[column], "from_db_value")
-                    else value
+                    select_field_map[column].attname: (
+                        select_field_map[column].from_db_value(
+                            value, expression=None, connection=connection
+                        )
+                        if hasattr(select_field_map[column], "from_db_value")
+                        else value
+                    )
                     for column, value in zip(columns, row)
                 }
             )
